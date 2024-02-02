@@ -5,11 +5,12 @@ import google.generativeai as genai
 from PIL import Image
 import os
 import PyPDF2
-from dotenv import load_dotenv
 
-load_dotenv()
+# from dotenv import load_dotenv
 
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
+# load_dotenv()
+os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
+GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
 assert len(GOOGLE_API_KEY) > 0, "Please set the GOOGLE_API_KEY in the .env file"
 genai.configure(api_key=GOOGLE_API_KEY)
 
