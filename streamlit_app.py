@@ -73,28 +73,51 @@ def get_model_response(upload_image_file, user_prompt):
     return response
 
 
-def capture_user_prompt():
-    st.session_state.user_prompt = st.session_state.user_prompt_input_text
-    st.session_state.user_prompt_input_text = ""
-
-
 def init_session_state():
-    if "user_prompt" not in st.session_state:
-        st.session_state.user_prompt = ""
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+
+
+@st.cache_data
+def get_doc_info(uploaded_file):
+    response = get_model_response(
+        uploaded_file,
+        user_prompt="Suggest 3 questions to ask about this document",
+    )
+
+    markdown = None
+    image = None
+    if uploaded_file.type == "application/pdf":
+        # text = extract_text_from_pdf(uploaded_file=uploaded_file)
+        # Convert the file to a data URL
+        b64 = base64.b64encode(uploaded_file.getvalue()).decode()
+        pdf_url = f"data:application/pdf;base64,{b64}"
+        # Create an iframe with the data URL as the source
+        markdown = f'<iframe src="{pdf_url}" width="700" height="700"></iframe>'
+
+        # st.download_button("Download PDF", upload_image_file.getvalue(), file_name=upload_image_file.name)
+    else:
+        image = Image.open(uploaded_file)
+
+    return response, markdown, image
 
 
 def main():
     # Initialize the Streamlit App
-    st.set_page_config(page_title="TalkinDocs")
+    st.set_page_config(page_title="TalkinDocs", layout="wide")
     init_session_state()
 
-    uploaded_doc_file = st.file_uploader(
-        "Choose an Image or PDF of the document",
-        type=["jpg", "jpeg", "png", "pdf"],
-    )
+    st.title("TalkinDocs")
 
-    with st.sidebar:
-        st.title("TalkinDocs")
+    col1, col2 = st.columns([1, 1])
+    with col2:
+        uploaded_doc_file = st.file_uploader(
+            "Choose an Image or PDF of the document",
+            type=["jpg", "jpeg", "png", "pdf"],
+        )
+
+    with col1:
+
         st.write(
             "This app uses the Google AI Generative Model to answer questions about documents."
         )
@@ -105,47 +128,53 @@ def main():
             "The model will also suggest questions to ask about the document if you don't have any."
         )
         st.divider()
-        st.text_input(
+
+        user_prompt = st.chat_input(
             "What would you like to know about this document?",
-            key="user_prompt_input_text",
-            on_change=capture_user_prompt,
+            disabled=uploaded_doc_file is None,
         )
-        submit = st.button("Ask your question")
-
-    user_prompt = st.session_state.user_prompt
-    st.session_state.user_prompt = ""
-
-    print("uploaded_doc_file", uploaded_doc_file)
+        # st.text_input(
+        #     "What would you like to know about this document?",
+        #     key="user_prompt_input_text",
+        #     on_change=capture_user_prompt,
+        # )
+        # submit = st.button("Ask your question")
 
     if uploaded_doc_file and user_prompt:
-        with st.spinner("Processing..."):
-            response = get_model_response(uploaded_doc_file, user_prompt)
-            st.subheader("Answer")
-            st.write(response)
-
-    elif uploaded_doc_file is not None:
-        response = get_model_response(
-            uploaded_doc_file,
-            user_prompt="Suggest 3 questions to ask about this document",
+        st.session_state.chat_history.append(
+            {"role": "user", "content": user_prompt, "ref_file": uploaded_doc_file.name}
         )
-        st.subheader("Example Questions")
-        st.write(response)
+        with col1:
+            with st.spinner("Thinking..."):
+                response = get_model_response(uploaded_doc_file, user_prompt)
+                st.session_state.chat_history.append(
+                    {
+                        "role": "model",
+                        "content": response,
+                        "ref_file": uploaded_doc_file.name,
+                    }
+                )
 
-        if uploaded_doc_file.type == "application/pdf":
-            text = extract_text_from_pdf(uploaded_file=uploaded_doc_file)
-            # Convert the file to a data URL
-            b64 = base64.b64encode(uploaded_doc_file.getvalue()).decode()
-            pdf_url = f"data:application/pdf;base64,{b64}"
-            # Create an iframe with the data URL as the source
-            st.markdown(
-                f'<iframe src="{pdf_url}" width="700" height="700"></iframe>',
-                unsafe_allow_html=True,
-            )
-            st.write(text)
-            # st.download_button("Download PDF", upload_image_file.getvalue(), file_name=upload_image_file.name)
-        else:
-            image = Image.open(uploaded_doc_file)
-            st.image(image, caption="Uploaded Image", use_column_width=True)
+    if uploaded_doc_file is not None:
+        with st.spinner("Processing..."):
+            with col2:
+                res, markdown, image = get_doc_info(uploaded_doc_file)
+
+                st.subheader("Question Ideas")
+                st.write(res)
+                if markdown:
+                    st.markdown(markdown, unsafe_allow_html=True)
+                if image:
+                    st.image(image, caption="Uploaded Image", use_column_width=True)
+
+    with col1:
+        for chat in st.session_state.chat_history:
+            is_model_msg = chat["role"] == "model"
+            with st.chat_message("AI" if is_model_msg else "User"):
+                author = "DocMaster" if is_model_msg else "You"
+                st.write(f"**{author}**")
+                st.write(chat["content"])
+                st.caption(f"Document: {chat['ref_file']}")
 
 
 if __name__ == "__main__":
