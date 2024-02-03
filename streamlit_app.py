@@ -94,7 +94,10 @@ def get_doc_info(uploaded_file):
         b64 = base64.b64encode(uploaded_file.getvalue()).decode()
         pdf_url = f"data:application/pdf;base64,{b64}"
         # Create an iframe with the data URL as the source
-        markdown = f'<iframe src="{pdf_url}" width="700" height="700"></iframe>'
+        # markdown = f'<iframe src="{pdf_url}" width="700" height="700"></iframe>'
+        markdown = (
+            f'<embed src="{pdf_url}" type="application/pdf" width="700" height="700" />'
+        )
 
         # st.download_button("Download PDF", upload_image_file.getvalue(), file_name=upload_image_file.name)
     else:
